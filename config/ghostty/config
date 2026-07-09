@@ -7,6 +7,9 @@ window-height = 60
 
 term = xterm-256color
 
+# line (bar) cursor instead of block
+cursor-style = bar
+
 keybind = ctrl+h=goto_split:left
 keybind = ctrl+j=goto_split:bottom
 keybind = ctrl+k=goto_split:top

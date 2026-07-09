@@ -1,50 +1,50 @@
 # Dotfiles Brewfile
 # Install with: brew bundle install
+# Update with: brew bundle dump --force --file=~/code/dotfiles/Brewfile
 
 # Taps
-tap "nikitabobko/tap"
+tap "maddada/tap"       # fluidvoice
 
 # Core
-brew "coreutils"
 brew "curl"
+brew "gettext"
 brew "git"
-brew "zsh"
 
 # Terminal & Shell
 brew "tmux"
-brew "zellij"
 
 # Build tools (neovim from source, etc.)
 brew "cmake"
 brew "ninja"
 
 # Search & Navigation
-brew "bat"
-brew "fd"
-brew "jq"
 brew "ripgrep"
-brew "tree"
 
 # Development
 brew "gh"
-brew "libpq"
-brew "marksman"
+brew "node"
 brew "pyenv"
-brew "python@3.12"
+brew "xcodegen"
+
+# AI / LLM
+brew "llmfit"
 
 # Media
 brew "ffmpeg"
-brew "yt-dlp"
 
 # System
 brew "bpytop"
 brew "fastfetch"
+brew "macmon"
 
-# Fonts
-cask "font-inconsolata"
+# Fonts (ghostty is configured for InconsolataMonoNerdFont)
 cask "font-inconsolata-nerd-font"
 
 # Casks
-cask "nikitabobko/tap/aerospace"
-cask "gpg-suite"
+cask "cmux"           # primary terminal (Ghostty-based)
+cask "ghostty"
+cask "fluidvoice"
 cask "localsend"
+
+# npm CLIs
+npm "firecrawl-cli"

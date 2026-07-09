@@ -1,0 +1,66 @@
+providers: 
+  webSearch: firecrawl
+setupVersion: 1
+modelRoles: 
+  default: openrouter/z-ai/glm-5.2:medium
+  advisor: anthropic/claude-fable-5:xhigh
+advisor: 
+  enabled: true
+theme: 
+  dark: dark-catppuccin
+  light: light-catppuccin
+statusLine: 
+  preset: default
+  sessionAccent: true
+  transparent: true
+disabledProviders: 
+  - openai
+  - openai-codex
+  - github-copilot
+  - google
+  - google-vertex
+  - google-gemini-cli
+  - google-antigravity
+  - groq
+  - mistral
+  - xai
+  - xai-oauth
+  - cursor
+  - azure
+  - amazon-bedrock
+  - cerebras
+  - deepseek
+  - fireworks
+  - together
+  - nvidia
+  - huggingface
+  - moonshot
+  - nanogpt
+  - venice
+  - vercel-ai-gateway
+  - cloudflare-ai-gateway
+  - litellm
+  - kilo
+  - zai
+  - zenmux
+  - zhipu-coding-plan
+  - umans
+  - qianfan
+  - qwen-portal
+  - synthetic
+  - minimax
+  - alibaba-coding-plan
+  - aimlapi
+  - gitlab-duo
+  - opencode-zen
+  - opencode-go
+  - firepass
+  - wafer-serverless
+  - xiaomi
+  - ollama-cloud
+  - ollama
+  - llama.cpp
+  - lm-studio
+retry: 
+  fallbackChains: 
+    {}

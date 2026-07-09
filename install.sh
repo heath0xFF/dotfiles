@@ -17,9 +17,7 @@ backup_and_copy() {
     cp "$src" "$dest"
 }
 
-# --- macOS ---
-
-install_macos() {
+install_packages() {
     if ! command_exists brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -29,49 +27,56 @@ install_macos() {
     brew bundle install --file="$DOTFILES_DIR/Brewfile"
 }
 
-# --- Linux ---
-
-install_linux() {
-    sudo apt update
-    sudo apt install -y \
-        git zsh curl wget tmux \
-        build-essential cmake ninja-build gettext \
-        jq tree ripgrep fd-find bat \
-        pyenv python3-pip
-
-    install_neovim_from_source
-}
-
-install_neovim_from_source() {
-    if command_exists nvim; then
-        info "Neovim already installed: $(nvim --version | head -1)"
+install_uv() {
+    if command_exists uv; then
+        info "uv already installed: $(uv --version)"
         return
     fi
 
-    info "Building Neovim from source..."
-    git clone https://github.com/neovim/neovim.git /tmp/neovim-build
-    cd /tmp/neovim-build
-    make CMAKE_BUILD_TYPE=Release
-    sudo make install
-    cd "$DOTFILES_DIR"
-    rm -rf /tmp/neovim-build
-    info "Neovim installed: $(nvim --version | head -1)"
+    info "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 }
 
-# --- Shared ---
-
-install_nvm_and_node() {
-    if [ ! -d "$HOME/.nvm" ]; then
-        info "Installing nvm..."
-        curl -so- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+install_omlx() {
+    if [ -d "/Applications/oMLX.app" ]; then
+        info "oMLX already installed"
+        return
     fi
 
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    info "Installing oMLX (local MLX model server)..."
+    local urls url dmg="/tmp/oMLX.dmg" mount_point os_major
+    urls=$(curl -fsSL https://api.github.com/repos/jundot/omlx/releases/latest \
+        | grep -o 'https://[^"]*\.dmg')
+    # releases ship one DMG per macOS version — prefer the one matching ours
+    os_major=$(sw_vers -productVersion | cut -d. -f1)
+    url=$(echo "$urls" | grep "macos${os_major}" | head -1)
+    [ -z "$url" ] && url=$(echo "$urls" | head -1)
+    if [ -z "$url" ]; then
+        warn "Could not find oMLX DMG — install manually: https://github.com/jundot/omlx/releases"
+        return
+    fi
 
-    if ! command_exists node; then
-        info "Installing Node LTS..."
-        nvm install --lts
+    curl -fsSL -o "$dmg" "$url"
+    mount_point=$(hdiutil attach "$dmg" -nobrowse | grep -o '/Volumes/.*' | head -1)
+    cp -R "$mount_point"/*.app /Applications/
+    hdiutil detach "$mount_point" -quiet
+    rm -f "$dmg"
+    info "oMLX installed — launch it once to set up the model directory and CLI"
+}
+
+install_oh_my_pi() {
+    if ! command_exists bun && [ ! -x "$HOME/.bun/bin/bun" ]; then
+        info "Installing bun..."
+        curl -fsSL https://bun.sh/install | bash
+    fi
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+
+    if command_exists omp; then
+        info "oh-my-pi already installed: $(omp --version 2>/dev/null)"
+    else
+        info "Installing oh-my-pi..."
+        bun install -g @oh-my-pi/pi-coding-agent
     fi
 }
 
@@ -86,20 +91,23 @@ install_claude_code() {
 }
 
 copy_configs() {
-    mkdir -p "$HOME/.config/ghostty" "$HOME/.config/aerospace"
+    mkdir -p "$HOME/.config/ghostty" "$HOME/.omp/agent"
 
     backup_and_copy "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+    backup_and_copy "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
+    backup_and_copy "$DOTFILES_DIR/.zprofile" "$HOME/.zprofile"
     backup_and_copy "$DOTFILES_DIR/.tmux.conf" "$HOME/.tmux.conf"
 
     if [ ! -f "$HOME/.gitconfig" ]; then
         cp "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
-        warn "Copied .gitconfig template — update your name and email!"
+        warn "Copied .gitconfig — verify name and email!"
     fi
 
-    [ -f "$DOTFILES_DIR/config/ghostty/config" ] && \
-        backup_and_copy "$DOTFILES_DIR/config/ghostty/config" "$HOME/.config/ghostty/config"
-    [ -f "$DOTFILES_DIR/config/aerospace/aerospace.toml" ] && \
-        backup_and_copy "$DOTFILES_DIR/config/aerospace/aerospace.toml" "$HOME/.config/aerospace/aerospace.toml"
+    backup_and_copy "$DOTFILES_DIR/config/ghostty/config" "$HOME/.config/ghostty/config"
+
+    # oh-my-pi (models/settings only — auth lives in omp's own storage, never in the repo)
+    backup_and_copy "$DOTFILES_DIR/config/omp/config.yml" "$HOME/.omp/agent/config.yml"
+    backup_and_copy "$DOTFILES_DIR/config/omp/models.yml" "$HOME/.omp/agent/models.yml"
 
     # nvim config (separate repo)
     if [ ! -d "$HOME/.config/nvim" ]; then
@@ -117,18 +125,18 @@ set_default_shell() {
     fi
 }
 
-# --- Main ---
-
 main() {
-    info "Installing dotfiles from $DOTFILES_DIR"
-
     case "$OSTYPE" in
-        darwin*)  install_macos ;;
-        linux*)   install_linux ;;
-        *)        warn "Unknown OS — skipping package install" ;;
+        darwin*) ;;
+        *) warn "This script is macOS-only."; exit 1 ;;
     esac
 
-    install_nvm_and_node
+    info "Installing dotfiles from $DOTFILES_DIR"
+
+    install_packages
+    install_uv
+    install_oh_my_pi
+    install_omlx
     copy_configs
     set_default_shell
     install_claude_code
@@ -136,9 +144,10 @@ main() {
     echo ""
     echo "Done! Next steps:"
     echo "  1. Restart your terminal (or: source ~/.zshrc)"
-    echo "  2. Update ~/.gitconfig with your name/email"
+    echo "  2. Verify ~/.gitconfig name/email"
     echo "  3. Open nvim to auto-install plugins"
     echo "  4. pyenv install 3.12 && pyenv global 3.12"
+    echo "  5. Create ~/.zsh_secrets (chmod 600) with API keys — sourced by .zshenv"
 }
 
 main

@@ -1,36 +1,34 @@
-# Start Tmux
-# if [ "$TMUX" = "" ]; then tmux new -s default; fi
-
-# autostart zellij
-# eval "$(zellij setup --generate-auto-start zsh)"
+# ~/.zshrc — INTERACTIVE shells only. Prompt, completions, aliases, functions,
+# and interactive tool init live here. Environment/PATH/API keys live in ~/.zshenv
+# so non-interactive and GUI-launched shells (which never read .zshrc) get them too.
 
 # color ls output
 export CLICOLOR=1
 
 setopt autocd
-# setopt auto_cd
 
-# turn on completions and then make sure to tell zsh that big letters match small letters and small letters match big letters
-autoload -Uz compinit && compinit
-zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+# Completions: cached compinit — skip the security audit + re-dump when <24h old.
+autoload -Uz compinit
+() {
+  setopt local_options extended_glob
+  if [[ -n ~/.zcompdump(#qN.mh-24) ]]; then compinit -C; else compinit; fi
+}
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'   # case-insensitive matching
 
 #====================== Prompt ====================================================================
 autoload -Uz vcs_info
 precmd_vcs_info() { vcs_info }
 precmd_functions+=( precmd_vcs_info )
 
-# setup prompt (with git branch name)
+# single line; git info + exit status on the right
 setopt PROMPT_SUBST
-PROMPT='%F{002}%n%f@%F{002}%m%f | %F{004}${PWD/#$HOME/~}%f ${vcs_info_msg_0_} >%{$reset_color%} '
-
-# format the git branch name in the prompt
-zstyle ':vcs_info:git:*' formats '(%F{005}%b%f)'
-# Enable checking for (un)staged changes, enabling use of %u and %c
+PROMPT='%F{004}%~%f %(?.%F{002}.%F{001})❯%f '
+RPROMPT='${vcs_info_msg_0_}%(?.. %F{001}✘ %?%f)'
+# prepend user@host when connected over ssh
+[[ -n $SSH_CONNECTION ]] && PROMPT="%F{002}%n@%m%f $PROMPT"
 zstyle ':vcs_info:*' check-for-changes true
-# Set custom strings for an unstaged vcs repo changes (*) and staged changes (+)
 zstyle ':vcs_info:*' unstagedstr ' ✗'
 zstyle ':vcs_info:*' stagedstr ' ✓'
-# Set the format of the Git information for vcs_info
 zstyle ':vcs_info:git:*' formats       '(%F{005}%b%u%c%f)'
 zstyle ':vcs_info:git:*' actionformats '(%F{005}%b|%a%u%c%f)'
 #===================== Prompt =====================================================================
@@ -47,7 +45,7 @@ gcam() {
   if [ $# -eq 0 ]; then
     # If no commit message is provided, prompt the user for one
     echo "Please enter a commit message:"
-    read -r -p "> " msg
+    read -r "msg?> "
     git commit -a -m "$msg"
   else
     # If a commit message is provided, use it
@@ -59,76 +57,90 @@ gcam() {
 
 # gst because i like that command from omz
 gst() {
-  if [ $# -gt 0 ]; then
-    # If an argument is provided, assume it's a branch name and switch to that branch
-    local branch=$1
-    git checkout $branch
+  git status
+}
+
+# gco because i like that command from omz
+gco() {
+  if [ $# -eq 0 ]; then
+    # No args: jump back to the previous branch (like `cd -`)
+    git checkout -
   else
-    # If no arguments are provided, just show the current status
-    git status
+    git checkout "$@"
   fi
 }
 
-# connect to first tmux session or make a new one if not running
-tmux_first_session() {
-    # Get the list of existing Tmux sessions, excluding any empty lines
-    local sessions=$(tmux ls 2>/dev/null | awk -F: '{print $1}' | sed '/^$/d')
+# Attach to the main workspace (full layout), else first existing session
+# ── tm: attach to main, building its layout if it doesn't exist ──
+tmux_session() {
+  if ! tmux has-session -t main 2>/dev/null; then
+    tmux new-session -d -s main -n dev -c "$HOME"
 
-    if [[ -z "$sessions" ]]; then
-        echo "No tmux sessions found. Creating a new session..."
-        # Create a new Tmux session with a default name (e.g., 'default') and attach to it
-        tmux new-session -s default || {
-            echo "Failed to create a new Tmux session."
-            return 1
-        }
-    else
-        # Get the first session from the list
-        local first_session=$(echo "$sessions" | head -n 1)
+    # Window 1: dev — nvim | shell
+    tmux send-keys    -t main:dev
+    # tmux split-window -h -t main:dev -c "#{pane_current_path}"
+    # tmux split-window -v -t main:dev.2 -c "#{pane_current_path}"   # right → top / bottom
 
-        # Attach to the first session
-        tmux attach-session -t "$first_session"
-    fi
+    # Window 2: deepthought
+    tmux new-window -t main -n deepthought
+    tmux send-keys -t main:deepthought 'ssh -t deepthought' Enter
+
+    # Window 3: trillian/kavula
+    tmux new-window -t main -n kavula
+    tmux send-keys -t main:kavula 'ssh -t kavula' Enter
+
+    tmux select-window -t main:dev
+    tmux select-pane   -t main:dev.1
+  fi
+
+  # Attach from a normal shell, or switch if already inside tmux
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t main
+  else
+    tmux attach -t main
+  fi
 }
 
+# download audio from a url as opus
+dlaudio() { yt-dlp -x --audio-format opus "$1" }
 #===================== Functions ==================================================================
-
-# PATHs
-export PATH="$HOME/.cargo/bin:$PATH" # cargo for rust
-export PATH="$HOME/.local/:$PATH"
-export PATH="/Applications/Alacritty.app/Contents/MacOS:$PATH" # this enables you to use alacritty commands, like to mirgate from yml to toml
 
 # aliases
 alias python="python3"
 alias virtual="python -m venv .venv"
 alias activate="source .venv/bin/activate"
 alias ll='ls -al'
-alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 alias ol='ollama run llama3.2'
 alias v='nvim'
-alias dlaudio='f() { yt-dlp -x --audio-format opus $1. };f'
-alias daily="v ~/Documents/personal-notes/daily.md"
-alias todos="v ~/Documents/personal-notes/todos.md"
-alias wt="nvim ~/.config/wezterm/wezterm.lua"
-alias gt="nvim ~/.config/ghostty/config"
-alias tm="tmux_first_session"
+alias tm="tmux_session"
 alias btop="bpytop"
 
-# pyenv stuff
+# pyenv (interactive python version management)
 export PYENV_ROOT="$HOME/.pyenv"
 command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
-# node version manager (nvm) stuff
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# node/npm/npx come from ~/.local/bin (on PATH via ~/.zprofile) for ALL shells —
+# interactive and GUI apps alike, so `npm i -g` lands in one place everyone sees.
+# (Removed nvm: it managed a single version, ran interactive-only, and hid node
+# from non-interactive shells like Modelo's `zsh -lc`. Restore from ~/.nvm if ever
+# you actually need per-project node versions — or use mise for that + python.)
 
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+# oh my pi — completions cached; regenerated when the omp binary changes
+if (( $+commands[omp] )); then
+  _ompc=~/.cache/omp-completions.zsh
+  if [[ ! -s $_ompc || $_ompc -ot $commands[omp] ]]; then
+    mkdir -p ~/.cache && omp completions zsh > $_ompc
+  fi
+  source $_ompc
+  unset _ompc
+fi
 
-# Added by Antigravity
-export PATH="/Users/heath/.antigravity/antigravity/bin:$PATH"
-export PATH="$HOME/.local/bin:$PATH"
+# Entire CLI shell completion
+(( $+commands[entire] )) && source <(entire completion zsh)
 
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/heath/.lmstudio/bin"
-# End of LM Studio CLI section
+# bun completions
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+
+# Start Tmux (kept last so the tmux server inherits the full environment)
+# if [ "$TMUX" = "" ]; then tm; fi
