@@ -70,37 +70,6 @@ gco() {
   fi
 }
 
-# Attach to the main workspace (full layout), else first existing session
-# ── tm: attach to main, building its layout if it doesn't exist ──
-tmux_session() {
-  if ! tmux has-session -t main 2>/dev/null; then
-    tmux new-session -d -s main -n dev -c "$HOME"
-
-    # Window 1: dev — nvim | shell
-    tmux send-keys    -t main:dev
-    # tmux split-window -h -t main:dev -c "#{pane_current_path}"
-    # tmux split-window -v -t main:dev.2 -c "#{pane_current_path}"   # right → top / bottom
-
-    # Window 2: deepthought
-    tmux new-window -t main -n deepthought
-    tmux send-keys -t main:deepthought 'ssh -t deepthought' Enter
-
-    # Window 3: trillian/kavula
-    tmux new-window -t main -n kavula
-    tmux send-keys -t main:kavula 'ssh -t kavula' Enter
-
-    tmux select-window -t main:dev
-    tmux select-pane   -t main:dev.1
-  fi
-
-  # Attach from a normal shell, or switch if already inside tmux
-  if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t main
-  else
-    tmux attach -t main
-  fi
-}
-
 # download audio from a url as opus
 dlaudio() { yt-dlp -x --audio-format opus "$1" }
 #===================== Functions ==================================================================
@@ -112,7 +81,6 @@ alias activate="source .venv/bin/activate"
 alias ll='ls -al'
 alias ol='ollama run llama3.2'
 alias v='nvim'
-alias tm="tmux_session"
 alias btop="bpytop"
 
 # pyenv (interactive python version management)
@@ -126,21 +94,11 @@ eval "$(pyenv init -)"
 # from non-interactive shells like Modelo's `zsh -lc`. Restore from ~/.nvm if ever
 # you actually need per-project node versions — or use mise for that + python.)
 
-# oh my pi — completions cached; regenerated when the omp binary changes
-if (( $+commands[omp] )); then
-  _ompc=~/.cache/omp-completions.zsh
-  if [[ ! -s $_ompc || $_ompc -ot $commands[omp] ]]; then
-    mkdir -p ~/.cache && omp completions zsh > $_ompc
-  fi
-  source $_ompc
-  unset _ompc
-fi
-
 # Entire CLI shell completion
 (( $+commands[entire] )) && source <(entire completion zsh)
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
-# Start Tmux (kept last so the tmux server inherits the full environment)
-# if [ "$TMUX" = "" ]; then tm; fi
+# Start Herdr (kept last so the Herdr server inherits the full environment)
+if [ "$HERDR_ENV" = "" ]; then herdr; fi
